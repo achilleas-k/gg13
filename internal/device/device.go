@@ -6,7 +6,9 @@
 package device
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"image"
 	"os"
@@ -27,7 +29,10 @@ type Device interface {
 	SetBacklightColour(r, g, b uint8) error
 	SetLCD(image.Image) error
 	ResetLCD() error
+	SetTimeout(time.Duration) error
 }
+
+var ErrReadTimeout = errors.New("timed out reading from device")
 
 type G13Device struct {
 	ctx  *gousb.Context
@@ -36,6 +41,8 @@ type G13Device struct {
 	intf *gousb.Interface
 	iep  *gousb.InEndpoint
 	oep  *gousb.OutEndpoint
+
+	timeout time.Duration
 }
 
 // New returns an initialised [G13Device] for a connected G13 gameboard. It
@@ -96,6 +103,10 @@ func New() (Device, error) {
 		return nil, fmt.Errorf("failed to initialise output endpoint: %w", err)
 	}
 	d.oep = op
+
+	// set default timeout to 8 ms, typical USB low speed interrupt polling
+	// interval
+	d.timeout = 8 * time.Millisecond
 	return &d, nil
 }
 
@@ -156,13 +167,34 @@ func (d *G13Device) ReadInput() (uint64, error) {
 	return binary.LittleEndian.Uint64(buf), nil
 }
 
+// ReadBytes reads a byte array from the device. The size is the maximum
+// supported. Returns a [ErrReadTimeout] if the read times out. Timeout can
+// be set using [G13Device.SetTimeout].
 func (d *G13Device) ReadBytes() ([]byte, error) {
 	if d.iep == nil {
 		return nil, fmt.Errorf("tried to read bytes from a closed device")
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), d.timeout)
+	defer cancel()
+
 	buf := make([]byte, 1*d.iep.Desc.MaxPacketSize)
-	if _, err := d.iep.Read(buf); err != nil {
+	if _, err := d.iep.ReadContext(ctx, buf); err != nil {
+		if errors.Is(err, gousb.TransferCancelled) {
+			return nil, ErrReadTimeout
+		}
 		return nil, fmt.Errorf("failed reading from device: %w", err)
 	}
+
 	return buf, nil
+}
+
+// SetTimeout sets the timeout for reads from the device.
+func (d *G13Device) SetTimeout(dt time.Duration) error {
+	if d == nil {
+		return fmt.Errorf("tried to set timeout on nil device")
+	}
+
+	d.timeout = dt
+	return nil
 }
