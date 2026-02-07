@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -103,6 +104,9 @@ func g13(cmd *cobra.Command, args []string) error {
 	var consecutiveReadErrors uint8 = 0
 	for {
 		input, err := dev.ReadInput()
+		if errors.Is(err, device.ErrReadTimeout) {
+			continue
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "e: %s (%d)\n", err, consecutiveReadErrors)
 			consecutiveReadErrors++
