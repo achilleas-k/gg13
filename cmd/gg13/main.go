@@ -79,6 +79,33 @@ func initialise(g13cfg *config.G13Config) (device.Device, keyboard.Keyboard, joy
 // TODO: maybe make configurable
 const errorCounterThreshold = 3
 
+func handleInput(input uint64, g13cfg *config.G13Config, vkb keyboard.Keyboard, vjs joystick.Joystick) {
+	handleKeyboard(input, g13cfg, vkb)
+	handleJoystick(input, g13cfg, vjs)
+}
+
+func handleKeyboard(input uint64, g13cfg *config.G13Config, vkb keyboard.Keyboard) {
+	for kbkey, isDown := range g13cfg.GetKeyStates(input) {
+		if isDown {
+			if err := vkb.KeyDown(kbkey); err != nil {
+				fmt.Fprintf(os.Stderr, "keyboard error pressing %d: %s\n", kbkey, err)
+			}
+		} else if err := vkb.KeyUp(kbkey); err != nil {
+			fmt.Fprintf(os.Stderr, "keyboard error releasing %d: %s\n", kbkey, err)
+		}
+	}
+}
+
+func handleJoystick(input uint64, g13cfg *config.G13Config, vjs joystick.Joystick) {
+	stickPos := g13cfg.GetStickPosition(input)
+	if stickPos != nil {
+		xOutput, yOutput := stickPos.UinputPosition()
+		if err := vjs.StickPosition(xOutput, yOutput); err != nil {
+			fmt.Fprintf(os.Stderr, "joystick error setting position %f %f\n", xOutput, yOutput)
+		}
+	}
+}
+
 func g13(cmd *cobra.Command, args []string) error {
 	// SilenceUsage if the command executed correctly.
 	// Argument parsing has already succeeded, so any error returned here
@@ -140,23 +167,7 @@ func g13(cmd *cobra.Command, args []string) error {
 		// read successful - reset error counter
 		consecutiveReadErrors = 0
 
-		for kbkey, isDown := range g13cfg.GetKeyStates(input) {
-			if isDown {
-				if err := vkb.KeyDown(kbkey); err != nil {
-					fmt.Fprintf(os.Stderr, "keyboard error pressing %d: %s\n", kbkey, err)
-				}
-			} else if err := vkb.KeyUp(kbkey); err != nil {
-				fmt.Fprintf(os.Stderr, "keyboard error releasing %d: %s\n", kbkey, err)
-			}
-		}
-
-		stickPos := g13cfg.GetStickPosition(input)
-		if stickPos != nil {
-			xOutput, yOutput := stickPos.UinputPosition()
-			if err := vjs.StickPosition(xOutput, yOutput); err != nil {
-				fmt.Fprintf(os.Stderr, "joystick error setting position %f %f", xOutput, yOutput)
-			}
-		}
+		handleInput(input, g13cfg, vkb, vjs)
 	}
 }
 
