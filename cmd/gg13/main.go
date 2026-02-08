@@ -76,6 +76,9 @@ func initialise(g13cfg *config.G13Config) (device.Device, keyboard.Keyboard, joy
 	return dev, vkb, vjs, nil
 }
 
+// TODO: maybe make configurable
+const errorCounterThreshold = 3
+
 func g13(cmd *cobra.Command, args []string) error {
 	// SilenceUsage if the command executed correctly.
 	// Argument parsing has already succeeded, so any error returned here
@@ -110,14 +113,33 @@ func g13(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "e: %s (%d)\n", err, consecutiveReadErrors)
 			consecutiveReadErrors++
+
+			if consecutiveReadErrors >= errorCounterThreshold {
+				fmt.Println("Reinitialising device")
+				dev.Close()
+				dev = nil
+				if err := vkb.Close(); err != nil {
+					fmt.Fprintf(os.Stderr, "error closing vkb: %s\n", err)
+				}
+				// After 3 consecutive read errors, try to reinitialise the device.
+				// This is primarily meant to handle device disconnections.
+				dev, vkb, vjs, err = initialise(g13cfg)
+				if err != nil {
+					return err
+				}
+				consecutiveReadErrors = 0
+				fmt.Println("Device restored")
+				continue
+			}
+
 			// wait a bit before continuing to try to read
 			time.Sleep(500 * time.Millisecond)
-
-			// TODO: shut down if consecutive errors reaches a limit
 			continue
 		}
 
+		// read successful - reset error counter
 		consecutiveReadErrors = 0
+
 		for kbkey, isDown := range g13cfg.GetKeyStates(input) {
 			if isDown {
 				if err := vkb.KeyDown(kbkey); err != nil {
@@ -134,24 +156,6 @@ func g13(cmd *cobra.Command, args []string) error {
 			if err := vjs.StickPosition(xOutput, yOutput); err != nil {
 				fmt.Fprintf(os.Stderr, "joystick error setting position %f %f", xOutput, yOutput)
 			}
-		}
-
-		if consecutiveReadErrors > 0 {
-			// device is back after read errors
-			fmt.Println("Reinitialising device")
-			dev.Close()
-			dev = nil
-			if err := vkb.Close(); err != nil {
-				fmt.Fprintf(os.Stderr, "error closing vkb: %s\n", err)
-			}
-			// After 3 consecutive read errors, try to reinitialise the device.
-			// This is primarily meant to handle device disconnections.
-			dev, vkb, vjs, err = initialise(g13cfg)
-			if err != nil {
-				return err
-			}
-			consecutiveReadErrors = 0
-			fmt.Println("Device restored")
 		}
 	}
 }
