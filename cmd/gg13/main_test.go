@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,26 +32,27 @@ func (tk *TestKeyboard) Close() error {
 	return nil
 }
 
-func (tk *TestKeyboard) insert(action string, code int) {
+func (tk *TestKeyboard) insert(action string, code int) error {
+	if tk == nil {
+		return fmt.Errorf("keyboard not initialised")
+	}
 	eventIndex := len(tk.events) - 1
 	currentEvent := tk.events[eventIndex]
 	currentEvent = append(currentEvent, testEvent{action: action, code: code})
 	tk.events[eventIndex] = currentEvent
+	return nil
 }
 
 func (tk *TestKeyboard) KeyPress(k int) error {
-	tk.insert("press", k)
-	return nil
+	return tk.insert("press", k)
 }
 
 func (tk *TestKeyboard) KeyDown(k int) error {
-	tk.insert("down", k)
-	return nil
+	return tk.insert("down", k)
 }
 
 func (tk *TestKeyboard) KeyUp(k int) error {
-	tk.insert("up", k)
-	return nil
+	return tk.insert("up", k)
 }
 
 func (tk *TestKeyboard) newEvent() {
@@ -249,21 +251,33 @@ func (tj *TestJoystick) Close() error {
 }
 
 func (tj *TestJoystick) ButtonPress(b int) error {
+	if tj == nil {
+		return fmt.Errorf("joystick not initialised")
+	}
 	tj.events = append(tj.events, testEvent{action: "press", code: b})
 	return nil
 }
 
 func (tj *TestJoystick) ButtonDown(b int) error {
+	if tj == nil {
+		return fmt.Errorf("joystick not initialised")
+	}
 	tj.events = append(tj.events, testEvent{action: "down", code: b})
 	return nil
 }
 
 func (tj *TestJoystick) ButtonUp(b int) error {
+	if tj == nil {
+		return fmt.Errorf("joystick not initialised")
+	}
 	tj.events = append(tj.events, testEvent{action: "up", code: b})
 	return nil
 }
 
 func (tj *TestJoystick) StickPosition(x, y float32) error {
+	if tj == nil {
+		return fmt.Errorf("joystick not initialised")
+	}
 	tj.stickEvents = append(tj.stickEvents, stickEvent{x: x, y: y})
 	return nil
 }
@@ -559,6 +573,38 @@ func TestHandleInput(t *testing.T) {
 			}
 
 			assert.Equal(tc.expectedStickEvents, js.stickEvents)
+		})
+	}
+}
+
+func TestNoPanic(t *testing.T) {
+	// Test that we don't panic when the keyboard or joystick return an error.
+	// This test might change in the future if we change the input handlers to
+	// return errors. Currently, they just print an error message and continue.
+	// Inputs don't really matter.
+	testCases := map[string]struct {
+		kb *TestKeyboard
+		js *TestJoystick
+	}{
+		"both-nil": {},
+		"kb-nil": {
+			js: newTestJoystick(t),
+		},
+		"js-nil": {
+			kb: newTestKeyboard(t),
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			input := device.G20.Uint64() | device.G22.Uint64() | device.G4.Uint64() | encodeStickPosition(255, 255)
+			cfg := config.NewEmpty()
+			cfg.SetKey(device.G20, 29)
+			if tc.kb != nil {
+				tc.kb.newEvent()
+			}
+			assert.NotPanics(t, func() { handleInput(input, cfg, tc.kb, tc.js) })
+
 		})
 	}
 }
