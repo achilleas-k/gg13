@@ -104,9 +104,8 @@ func New() (Device, error) {
 	}
 	d.oep = op
 
-	// set default timeout to 8 ms, typical USB low speed interrupt polling
-	// interval
-	d.timeout = 8 * time.Millisecond
+	// Set default timeout to 100 ms. Feels the best empirically.
+	d.timeout = 100 * time.Millisecond
 	return &d, nil
 }
 
