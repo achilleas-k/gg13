@@ -81,7 +81,7 @@ func (d *G13Device) ResetBacklightColour() error {
 	return d.setBacklightColour(uint8(0), uint8(0), uint8(0))
 }
 
-func (d *G13Device) SetLCD(img image.Image) error {
+func (d *G13Device) setLCD(img image.Image) error {
 	bounds := img.Bounds()
 	if bounds.Min.X != 0 || bounds.Min.Y != 0 {
 		return fmt.Errorf("invalid image: bounds to not start at 0,0")
@@ -102,7 +102,29 @@ func (d *G13Device) SetLCD(img image.Image) error {
 	return nil
 }
 
+func (d *G13Device) SetLCD(img image.Image) error {
+	// initialise the LCD image and catch errors first before starting the
+	// routine
+	if err := d.setLCD(img); err != nil {
+		return err
+	}
+
+	lcdFn := func() {
+		if err := d.setLCD(img); err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+		}
+	}
+
+	d.routines.image = newRoutine(lcdFn, 1000*time.Millisecond)
+	return nil
+}
+
 func (d *G13Device) ResetLCD() error {
+	if d.routines.image != nil {
+		d.routines.image.stop()
+		d.routines.image = nil
+	}
+
 	blank := make([]uint8, LCDDataLength)
 	blank[0] = 0x03
 	n, err := d.oep.Write(blank)

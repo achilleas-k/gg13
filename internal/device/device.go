@@ -121,10 +121,6 @@ func (d *G13Device) Close() {
 		return
 	}
 
-	if d.routines.image != nil {
-		d.routines.image.stop()
-	}
-
 	if d.dev != nil {
 		if err := d.ResetBacklightColour(); err != nil {
 			fmt.Fprintf(os.Stderr, "error resetting backlight during shutdown: %s\n", err)
