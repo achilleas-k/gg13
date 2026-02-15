@@ -54,6 +54,12 @@ func (d *G13Device) setBacklightColour(r, g, b uint8) error {
 // b values and starts a background routine to keep setting the colour every
 // second.
 func (d *G13Device) SetBacklightColour(r, g, b uint8) error {
+	// stop the existing routine (if any) before starting a new one
+	if d.routines.colour != nil {
+		d.routines.colour.stop()
+		d.routines.colour = nil
+	}
+
 	// initialise the background colour and catch errors first before starting
 	// the routine
 	if err := d.setBacklightColour(r, g, b); err != nil {
@@ -103,6 +109,12 @@ func (d *G13Device) setLCD(img image.Image) error {
 }
 
 func (d *G13Device) SetLCD(img image.Image) error {
+	// stop the existing routine (if any) before starting a new one
+	if d.routines.image != nil {
+		d.routines.image.stop()
+		d.routines.image = nil
+	}
+
 	// initialise the LCD image and catch errors first before starting the
 	// routine
 	if err := d.setLCD(img); err != nil {
