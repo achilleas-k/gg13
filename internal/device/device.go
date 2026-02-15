@@ -121,10 +121,6 @@ func (d *G13Device) Close() {
 		return
 	}
 
-	if d.routines.colour != nil {
-		d.routines.colour.stop()
-	}
-
 	if d.routines.image != nil {
 		d.routines.image.stop()
 	}
