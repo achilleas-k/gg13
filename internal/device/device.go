@@ -42,7 +42,14 @@ type G13Device struct {
 	iep  *gousb.InEndpoint
 	oep  *gousb.OutEndpoint
 
+	routines routines
+
 	timeout time.Duration
+}
+
+type routines struct {
+	colour *routine
+	image  *routine
 }
 
 // New returns an initialised [G13Device] for a connected G13 gameboard. It
@@ -112,6 +119,14 @@ func New() (Device, error) {
 func (d *G13Device) Close() {
 	if d == nil {
 		return
+	}
+
+	if d.routines.colour != nil {
+		d.routines.colour.stop()
+	}
+
+	if d.routines.image != nil {
+		d.routines.image.stop()
 	}
 
 	if d.dev != nil {
