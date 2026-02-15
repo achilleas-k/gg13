@@ -3,6 +3,8 @@ package device
 import (
 	"fmt"
 	"image"
+	"os"
+	"time"
 
 	"github.com/google/gousb"
 )
@@ -34,7 +36,7 @@ const (
 	LCDMagicNumber = 3
 )
 
-func (d *G13Device) SetBacklightColour(r, g, b uint8) error {
+func (d *G13Device) setBacklightColour(r, g, b uint8) error {
 	// TODO: set context with timeout
 	data := []byte{5, r, g, b, 0}
 	n, err := d.dev.Control(ControlRequestType, SetupPacketRequest, BacklightColourVal, SetupPacketIndex, data)
@@ -44,11 +46,39 @@ func (d *G13Device) SetBacklightColour(r, g, b uint8) error {
 	if n != len(data) {
 		return fmt.Errorf("sent %d bytes but wrote %d while setting backlight colour", len(data), n)
 	}
+
 	return nil
 }
 
+// SetBacklightColour sets the LCD and key backlight colour to the given r, g,
+// b values and starts a background routine to keep setting the colour every
+// second.
+func (d *G13Device) SetBacklightColour(r, g, b uint8) error {
+	// initialise the background colour and catch errors first before starting
+	// the routine
+	if err := d.setBacklightColour(r, g, b); err != nil {
+		return err
+	}
+
+	colourFn := func() {
+		if err := d.setBacklightColour(r, g, b); err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+		}
+	}
+
+	d.routines.colour = newRoutine(colourFn, 1000*time.Millisecond)
+	return nil
+}
+
+// ResetBacklightColour sets the background colour to 0, 0, 0 (turns the
+// backlight off) and stops the backlight colour background routine.
 func (d *G13Device) ResetBacklightColour() error {
-	return d.SetBacklightColour(uint8(0), uint8(0), uint8(0))
+	if d.routines.colour != nil {
+		d.routines.colour.stop()
+		d.routines.colour = nil
+	}
+
+	return d.setBacklightColour(uint8(0), uint8(0), uint8(0))
 }
 
 func (d *G13Device) SetLCD(img image.Image) error {
