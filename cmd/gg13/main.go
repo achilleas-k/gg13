@@ -172,7 +172,9 @@ func g13(cmd *cobra.Command, args []string) error {
 
 			if consecutiveReadErrors >= errorCounterThreshold {
 				fmt.Println("Reinitialising device")
-				dev.Close()
+				if dev != nil {
+					dev.Close()
+				}
 				if err := vkb.Close(); err != nil {
 					fmt.Fprintf(os.Stderr, "error closing virtual keyboard during reinit: %s\n", err)
 				}
